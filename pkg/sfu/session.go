@@ -15,6 +15,9 @@ type Session interface {
 	ID() string
 	Publish(router Router, r Receiver)
 	Subscribe(peer Peer)
+	SubscribeBase(peer Peer)
+	SubscribeSelective(peer Peer, targetPeerId string)
+	UnSubscribeSelective(peer Peer, targetDownTrack *DownTrack, recv Receiver)
 	AddPeer(peer Peer)
 	RemovePeer(peer Peer)
 	AudioObserver() *AudioObserver
@@ -151,6 +154,96 @@ func (s *SessionLocal) Publish(router Router, r Receiver) {
 		}
 	}
 }
+
+func (s *SessionLocal) PublishBase(router Router, r Receiver) {
+	Logger.V(0).Info("Publishing track to peer")
+	// do nothing
+	return
+}
+func (s *SessionLocal) PublishSelective(router Router, r Receiver, targetPeerId string) {
+	// publish sender to target peer
+	peers := s.Peers()
+
+	for _, p := range peers{
+		// Don't sub to self
+		if router.ID() == p.ID() || p.Subscriber() == nil {
+			continue
+		}
+		if targetPeerId != p.ID(){
+			continue
+		}
+		Logger.V(0).Info("Publishing track to peer", "peer_id", p.ID())
+
+
+		if err := router.AddDownTracks(p.Subscriber(), r); err != nil {
+			Logger.Error(err, "Error subscribing transport to Router")
+			continue
+		}
+	}
+}
+
+func (s *SessionLocal) SubscribeBase(peer Peer) {
+	s.mu.RLock()
+	fdc := make([]string, len(s.fanOutDCs))
+	copy(fdc, s.fanOutDCs)
+	peers := make([]Peer, 0, len(s.peers))
+	for _, p := range s.peers {
+		if p == peer || p.Publisher() == nil {
+			continue
+		}
+		peers = append(peers, p)
+	}
+	s.mu.RUnlock()
+
+	// Subscribe to fan out datachannels
+	for _, label := range fdc {
+		n, err := peer.Subscriber().AddDataChannel(label)
+		if err != nil {
+			Logger.Error(err, "error adding datachannel")
+			continue
+		}
+		l := label
+		n.OnMessage(func(msg webrtc.DataChannelMessage) {
+			s.onMessage(peer.ID(), l, msg)
+		})
+	}
+
+	// Subscribe to publisher streams
+	peer.Subscriber().negotiate()
+}
+
+func (s *SessionLocal) UnSubscribeSelective(peer Peer, targetDownTrack *DownTrack, recv Receiver) {
+	if err := peer.Subscriber().pc.RemoveTrack(targetDownTrack.transceiver.Sender()); err != nil {
+		if err == webrtc.ErrConnectionClosed {
+			return
+		}
+		Logger.Error(err, "Error closing down track")
+	} else {
+		peer.Subscriber().RemoveDownTrack(recv.StreamID(), targetDownTrack)
+		peer.Subscriber().negotiate()
+	}
+	return
+}
+func (s *SessionLocal) SubscribeSelective(peer Peer, targetPeerId string) {
+	s.mu.RLock()
+	peers := make([]Peer, 0, len(s.peers))
+	s.mu.RUnlock()
+	// targetPeerId건 뭐건 받을애에 대해서 알면 됨.
+	// Subscribe to publisher streams
+	for _, p := range peers {
+		if p.ID() == targetPeerId {
+			err := p.Publisher().GetRouter().AddDownTracks(peer.Subscriber(), nil)
+			if err != nil {
+				Logger.Error(err, "Subscribing to Router err")
+				continue
+			}
+		}
+	}
+
+	peer.Subscriber().negotiate()
+	return
+}
+
 
 // Subscribe will create a Sender for every other Receiver in the SessionLocal
 func (s *SessionLocal) Subscribe(peer Peer) {

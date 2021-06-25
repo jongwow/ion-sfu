@@ -176,7 +176,8 @@ func (p *PeerLocal) Join(sid, uid string, config ...JoinConfig) error {
 	Logger.V(0).Info("PeerLocal join SessionLocal", "peer_id", p.id, "session_id", sid)
 
 	if !conf.NoSubscribe {
-		p.session.Subscribe(p)
+		//p.session.Subscribe(p)
+		p.session.SubscribeBase(p)
 	}
 	return nil
 }

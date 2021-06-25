@@ -119,7 +119,7 @@ func parse() bool {
 	return true
 }
 
-func getEnv(key string) string {
+func getEnv(key string) string { // OS에서 환경 변수 가져오는 함수.
 	if value, exists := os.LookupEnv(key); exists {
 		return value
 	}
@@ -127,7 +127,7 @@ func getEnv(key string) string {
 	return ""
 }
 
-func startMetrics(addr string) {
+func startMetrics(addr string) { // Metrics monitoring HTTP 서버를 띄우는 함수.
 	// start metrics server
 	m := http.NewServeMux()
 	m.Handle("/metrics", promhttp.Handler())
@@ -169,13 +169,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	if paddr != "" {
+	if paddr != "" { // Profiling 을 하기 위해 go pprof 사용. 그걸 보여주는 서버 실행.
 		go func() {
 			logger.Info("PProf Listening", "addr", paddr)
 			_ = http.ListenAndServe(paddr, http.DefaultServeMux)
 		}()
 	}
 
+	// gprc 프로메테우스 (모니터링 서버)
 	s := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
 	)
@@ -183,8 +184,9 @@ func main() {
 	// SFU instance needs to be created with logr implementation
 	sfu.Logger = logger
 
+	// SFU 서버 노드
 	nsfu := sfu.NewSFU(conf.Config)
-	dc := nsfu.NewDatachannel(sfu.APIChannelLabel)
+	dc := nsfu.NewDatachannel(sfu.APIChannelLabel) // 내부 데이터채널
 	dc.Use(datachannel.SubscriberAPI)
 
 	pb.RegisterSFUServer(s, server.NewServer(nsfu))
