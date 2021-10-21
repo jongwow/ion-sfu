@@ -655,3 +655,7 @@ func (m *Message) Payload() []byte {
 func (m *Message) Reply(msg []byte) error {
 	return m.p.reply(m.id, m.event, msg)
 }
+
+func (p PeerMeta) String() string {
+	return fmt.Sprintf("peerId: %s, sessionId: %s", p.PeerID, p.SessionID)
+}

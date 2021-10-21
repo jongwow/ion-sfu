@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -164,6 +165,9 @@ func main() {
 		WriteBufferSize: 1024,
 	}
 
+	//session, config := s.GetSession("A")
+	//session.AddRelayPeer()
+
 	http.Handle("/ws", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -176,6 +180,74 @@ func main() {
 
 		jc := jsonrpc2.NewConn(r.Context(), websocketjsonrpc2.NewObjectStream(c), p)
 		<-jc.DisconnectNotify()
+	}))
+
+	http.Handle("/manual", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { //todo: 일단 되는지 확인하기 위해서 정보를 가져오는 API와 relay를 trigger하는 API endpoint를 등록.
+		logger.Info("Manual Received: method:" + r.Method)
+		if r.Method == http.MethodGet {
+			sessions := s.GetSessions()
+			sessionInfoList := make([]sessionInfo, 0)
+			for _, session := range sessions {
+				peerIdList := make([]string, 0)
+				peers := session.Peers()
+				for _, peer := range peers {
+					peerIdList = append(peerIdList, peer.ID())
+				}
+				sessionInfoList = append(sessionInfoList, sessionInfo{SessionId: session.ID(), PeerIdList: peerIdList})
+			}
+
+			res := &ResponseGet{
+				Data: sessionInfoList,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(res)
+			return
+		} else if r.Method == http.MethodPost {
+			req := &RequestPost{}
+			json.NewDecoder(r.Body).Decode(req)
+
+			//session, _ := s.GetSession("test session")
+			//
+			//peers := session.Peers()
+			//peerIDList := make([]string, 0)
+			//for _, peer := range peers {
+			//	peerIDList = append(peerIDList, peer.ID())
+			//	if peer.ID() == "peer.ID()" {
+			//		// RelayWithFanOutDataChannels
+			//		r2, err := peer.Publisher().Relay(func(meta relay.PeerMeta, signal []byte) ([]byte, error) {
+			//			fmt.Println("meta is: ", meta.String())
+			//			fmt.Println("signal is:", string(signal))
+			//			if meta.SessionID == "" {
+			//				return nil, errors.New("not supported")
+			//			}
+			//			return signal, nil
+			//		}, sfu.RelayWithFanOutDataChannels())
+			//		if err != nil {
+			//			fmt.Println("ERROR: ", err)
+			//			continue
+			//		}
+			//		fmt.Println("r2: ", r2.ID())
+			//	}
+			//}
+			res := &RequestPost{
+				SessionId: req.SessionId + "-echo",
+				PeerId:    req.PeerId + "-echo",
+			}
+			//
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(res)
+			return
+
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		//Peer.Publisher().Relay(...) then signal the data to the remote SFU and ingest the data using:
+		//session.AddRelayPeer(peerID string, signalData []byte) ([]byte, error)
 	}))
 
 	go startMetrics(metricsAddr)
@@ -191,4 +263,21 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+type ResponsePost struct {
+	Data []string `json:"data"`
+}
+
+type sessionInfo struct {
+	SessionId  string   `json:"session_id"`
+	PeerIdList []string `json:"peer_id_list"`
+}
+type ResponseGet struct {
+	Data []sessionInfo `json:"data"`
+}
+
+type RequestPost struct {
+	SessionId string `json:"session_id"`
+	PeerId    string `json:"peer_id"`
 }
