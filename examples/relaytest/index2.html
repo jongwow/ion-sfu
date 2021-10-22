@@ -122,7 +122,7 @@
         constructor(pid) {
           this.pid = pid;
           this.signal = new Signal.IonSFUJSONRPCSignal(
-            "ws://localhost:7000/ws"
+            "ws://localhost:7100/ws"
           );
 
           const streams = {};
@@ -182,7 +182,7 @@
         joinBtn.style.display = "none";
         publishBtn.style.display = "block";
 
-        for (var i = 0; i < 2; i++) {
+        for (var i = 0; i < 1; i++) {
           const peer = new Peer(`peer-${i}`);
           peer.capture();
           peers.push(peer);

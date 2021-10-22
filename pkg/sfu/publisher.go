@@ -223,7 +223,7 @@ func (p *Publisher) Relay(signalFn func(meta relay.PeerMeta, signal []byte) ([]b
 
 	rp.OnReady(func() {
 		peer := p.session.GetPeer(p.id)
-
+		Logger.V(1).Info("Relay Peer OnReady")
 		p.relayed.set(true)
 		if lrp.relayFanOutDataChannels {
 			for _, lbl := range p.session.GetFanOutDataChannelLabels() {
